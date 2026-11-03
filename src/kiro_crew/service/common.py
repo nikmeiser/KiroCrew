@@ -427,8 +427,18 @@ def service_path(home: str) -> str:
     user-local bin dirs (``~/.local/bin``) and POSIX defaults are
     prepended in case the installer's ``$PATH`` is missing them.
     Duplicates are removed while preserving order.
+
+    mise shims come first, and unconditionally: ACP adapters resolve their
+    runtime with ``env`` (claude-agent-acp needs node >= 22, which AL2023's
+    system node isn't), and interactive shells put shims ahead of system
+    dirs via ``mise activate`` — the service must match or the gateway
+    spawns a different node than the shell that tested it. Baking the dir
+    even when mise isn't installed yet is harmless (a missing PATH entry is
+    skipped) and means a later ``mise install`` works without reinstalling
+    the service.
     """
     required = [
+        f"{home}/.local/share/mise/shims",
         f"{home}/.local/bin",
         "/usr/local/bin",
         "/usr/bin",

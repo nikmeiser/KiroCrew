@@ -1108,3 +1108,31 @@ class TestMacOSPlistRendering:
         called = [c.args[0] for c in proc.call_args_list]
         uid = getattr(os, "getuid", lambda: -1)()
         assert ["launchctl", "bootstrap", f"gui/{uid}", str(plist_path)] in called
+
+
+class TestServicePath:
+    """`service_path()` builds the PATH baked into the service unit."""
+
+    def test_mise_shims_first_then_local_bin(self, monkeypatch):
+        # ACP adapters resolve node via `env`; shims must beat system dirs
+        # (and be present even when mise isn't installed yet) or the gateway
+        # runs a different node than the interactive shell. Regression for
+        # claude-agent-acp dying on AL2023's system node 18 (needs >= 22).
+        from kiro_crew.service.common import service_path
+
+        monkeypatch.setenv("PATH", "/usr/bin:/bin")
+        parts = service_path("/home/alice").split(":")
+        assert parts[0] == "/home/alice/.local/share/mise/shims"
+        assert parts[1] == "/home/alice/.local/bin"
+
+    def test_installer_path_survives_after_required_prefixes(self, monkeypatch):
+        from kiro_crew.service.common import service_path
+
+        monkeypatch.setenv("PATH", "/opt/custom/bin:/usr/bin:/usr/bin")
+        parts = service_path("/home/alice").split(":")
+        assert "/opt/custom/bin" in parts
+        assert parts.index("/opt/custom/bin") > parts.index(
+            "/home/alice/.local/share/mise/shims"
+        )
+        # Dedup keeps one /usr/bin, order preserved.
+        assert parts.count("/usr/bin") == 1
